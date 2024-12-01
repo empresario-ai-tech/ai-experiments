@@ -5,17 +5,27 @@ import faiss
 import pickle
 from .utils import DATA_PATH
 import torch
+import torch_xla.core.xla_model as xm
+import os
 
 class IngredientEmbeddings:
     def __init__(self, model_name='all-MiniLM-L6-v2'):
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.device = self.get_device()
         self.model = SentenceTransformer(model_name).to(self.device)
         self.standardized_ingredients = self.load_standardized_ingredients()
         self.embeddings = self.generate_embeddings()
         self.index = self.build_faiss_index()
 
+    def get_device(self):
+        if 'COLAB_TPU_ADDR' in os.environ:
+            return xm.xla_device()
+        elif torch.cuda.is_available():
+            return 'cuda'
+        else:
+            return 'cpu'
+
     def load_standardized_ingredients(self):
-        df = pd.read_csv(f"{DATA_PATH}/standardized_ingredients.csv")
+        df = pd.read_csv(f"{DATA_PATH}/standardized_ingredients_dummy.csv")
         return df['ingredient_name'].tolist()
 
     def generate_embeddings(self):

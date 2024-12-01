@@ -2,11 +2,13 @@ from src.embeddings import IngredientEmbeddings
 from sentence_transformers import SentenceTransformer
 import numpy as np
 import torch
+import torch_xla.core.xla_model as xm
+import os
 
 class IngredientMatcher:
     def __init__(self, threshold=0.7):
         self.threshold = threshold
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.device = self.get_device()
         self.embeddings = IngredientEmbeddings()
         try:
             self.embeddings.load_embeddings()
@@ -14,8 +16,16 @@ class IngredientMatcher:
             self.embeddings.generate_embeddings()
             self.embeddings.save_embeddings()
     
+    def get_device(self):
+        if 'COLAB_TPU_ADDR' in os.environ:
+            return xm.xla_device()
+        elif torch.cuda.is_available():
+            return 'cuda'
+        else:
+            return 'cpu'
+
     def get_embedding(self, ingredient):
-        model = self.embeddings.model
+        model = self.embeddings.model.to(self.device)
         return model.encode(
             [ingredient], 
             convert_to_tensor=True, 
