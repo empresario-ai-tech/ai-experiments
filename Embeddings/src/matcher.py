@@ -1,10 +1,12 @@
 from src.embeddings import IngredientEmbeddings
 from sentence_transformers import SentenceTransformer
 import numpy as np
+import torch
 
 class IngredientMatcher:
     def __init__(self, threshold=0.7):
         self.threshold = threshold
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.embeddings = IngredientEmbeddings()
         try:
             self.embeddings.load_embeddings()
@@ -14,7 +16,11 @@ class IngredientMatcher:
     
     def get_embedding(self, ingredient):
         model = self.embeddings.model
-        return model.encode([ingredient], convert_to_tensor=True).cpu().numpy()
+        return model.encode(
+            [ingredient], 
+            convert_to_tensor=True, 
+            device=self.device
+        ).cpu().numpy()
 
     def match_ingredient(self, ingredient):
         query_embedding = self.get_embedding(ingredient)

@@ -4,10 +4,12 @@ import numpy as np
 import faiss
 import pickle
 from .utils import DATA_PATH
+import torch
 
 class IngredientEmbeddings:
     def __init__(self, model_name='all-MiniLM-L6-v2'):
-        self.model = SentenceTransformer(model_name)
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.model = SentenceTransformer(model_name).to(self.device)
         self.standardized_ingredients = self.load_standardized_ingredients()
         self.embeddings = self.generate_embeddings()
         self.index = self.build_faiss_index()
@@ -17,7 +19,12 @@ class IngredientEmbeddings:
         return df['ingredient_name'].tolist()
 
     def generate_embeddings(self):
-        embeddings = self.model.encode(self.standardized_ingredients, convert_to_tensor=True, show_progress_bar=True)
+        embeddings = self.model.encode(
+            self.standardized_ingredients, 
+            convert_to_tensor=True, 
+            show_progress_bar=True, 
+            device=self.device
+        )
         return embeddings.cpu().numpy()
 
     def build_faiss_index(self):
