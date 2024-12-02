@@ -2,6 +2,7 @@ from src.embeddings import IngredientEmbeddings
 import numpy as np
 import torch
 import os
+import config
 
 try:
     import torch_xla.core.xla_model as xm
@@ -9,15 +10,17 @@ except ImportError:
     xm = None
 
 class IngredientMatcher:
-    def __init__(self, threshold=0.7):
+    def __init__(self, threshold=config.THRESHOLD):
         self.threshold = threshold
         self.device = self.get_device()
         self.embeddings = IngredientEmbeddings()
-        try:
-            self.embeddings.load_embeddings()
-        except FileNotFoundError:
-            self.embeddings.generate_embeddings()
-            self.embeddings.save_embeddings()
+        
+        # Check if the embeddings file exists
+        if os.path.exists(config.EMBEDDINGS_PATH):
+            self.embeddings.load_embeddings(config.EMBEDDINGS_PATH)
+        else:
+            self.embeddings.initialize_embeddings()
+            self.embeddings.save_embeddings(config.EMBEDDINGS_PATH)
     
     def get_device(self):
         if xm and 'COLAB_TPU_ADDR' in os.environ:
@@ -42,7 +45,8 @@ class IngredientMatcher:
         closest_index = indices[0][0]
         similarity = 1 / (1 + closest_distance)  # Convert L2 distance to similarity
         if similarity >= self.threshold:
-            return self.embeddings.standardized_ingredients[closest_index], similarity
+            matched_name = self.embeddings.standardized_ingredients.iloc[closest_index]['ingredient_name']
+            return matched_name, similarity
         else:
             return None, similarity
 
