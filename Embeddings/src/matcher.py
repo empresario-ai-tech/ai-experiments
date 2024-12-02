@@ -1,9 +1,12 @@
 from src.embeddings import IngredientEmbeddings
-from sentence_transformers import SentenceTransformer
 import numpy as np
 import torch
-import torch_xla.core.xla_model as xm
 import os
+
+try:
+    import torch_xla.core.xla_model as xm
+except ImportError:
+    xm = None
 
 class IngredientMatcher:
     def __init__(self, threshold=0.7):
@@ -17,7 +20,7 @@ class IngredientMatcher:
             self.embeddings.save_embeddings()
     
     def get_device(self):
-        if 'COLAB_TPU_ADDR' in os.environ:
+        if xm and 'COLAB_TPU_ADDR' in os.environ:
             return xm.xla_device()
         elif torch.cuda.is_available():
             return 'cuda'

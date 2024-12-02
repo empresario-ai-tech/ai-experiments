@@ -5,8 +5,12 @@ import faiss
 import pickle
 from .utils import DATA_PATH
 import torch
-import torch_xla.core.xla_model as xm
 import os
+
+try:
+    import torch_xla.core.xla_model as xm
+except ImportError:
+    xm = None
 
 class IngredientEmbeddings:
     def __init__(self, model_name='all-MiniLM-L6-v2'):
@@ -17,7 +21,7 @@ class IngredientEmbeddings:
         self.index = self.build_faiss_index()
 
     def get_device(self):
-        if 'COLAB_TPU_ADDR' in os.environ:
+        if xm and 'COLAB_TPU_ADDR' in os.environ:
             return xm.xla_device()
         elif torch.cuda.is_available():
             return 'cuda'
