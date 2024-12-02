@@ -1,7 +1,8 @@
 from src.matcher import IngredientMatcher
+import config
 
 def standardize_ingredients(user_ingredients, ai_ingredients):
-    matcher = IngredientMatcher(threshold=0.7)
+    matcher = IngredientMatcher(threshold=config.THRESHOLD)
     
     print("Matching User Ingredients...")
     matched_user = matcher.match_ingredients_list(user_ingredients)
@@ -12,29 +13,7 @@ def standardize_ingredients(user_ingredients, ai_ingredients):
     return matched_user, matched_ai
 
 if __name__ == "__main__":
-    user_ingredients = [
-        "all purpose flour",
-        "gran sugar",
-        "olive oil",
-        "black pepper",
-        "chicken breasts",
-        "eggs",
-        "milk",
-        "butter"
-    ]
-    
-    ai_ingredients = [
-        "all-purpose flour",
-        "granulated sugar",
-        "extra virgin olive oil",
-        "black pepper",
-        "chicken breast",
-        "egg",
-        "whole milk",
-        "unsalted butter"
-    ]
-    
-    matched_user, matched_ai = standardize_ingredients(user_ingredients, ai_ingredients)
+    matched_user, matched_ai = standardize_ingredients(config.USER_INGREDIENTS, config.AI_INGREDIENTS)
     
     print("\nMatched User Ingredients:")
     for k, v in matched_user.items():
