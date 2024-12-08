@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Personalized Cooking Assistant</title>
+    <script>
+        async function getRecipe() {
+            const mealType = document.getElementById('mealType').value;
+            const response = await fetch('/generate_recipe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ meal_type: mealType })
+            });
+            const data = await response.json();
+            document.getElementById('recipe').innerText = data.recipe;
+        }
+    </script>
+</head>
+<body>
+    <h1>Personalized Cooking Assistant</h1>
+    <label for="mealType">Enter Meal Type:</label>
+    <input type="text" id="mealType" name="mealType">
+    <button onclick="getRecipe()">Get Recipe</button>
+    <pre id="recipe"></pre>
+</body>
+</html> 
