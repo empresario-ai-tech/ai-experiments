@@ -79,7 +79,7 @@ MODEL = "models/gemini-2.0-flash-exp"
 
 DEFAULT_MODE = "none"
 
-client = genai.Client(http_options={"api_version": "v1alpha"}, project=os.getenv("GOOGLE_PROJECT_ID_VOICE_MODEL"))
+client = genai.Client(http_options={"api_version": "v1alpha"}, api_key=os.getenv("GOOGLE_API_KEY_VOICE_MODEL"))
 
 CONFIG = {"generation_config": {"response_modalities": ["AUDIO"]}}
 
