@@ -61,7 +61,6 @@ import argparse
 
 from google import genai
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
 from typing import List
 
 if sys.version_info < (3, 11, 0):
