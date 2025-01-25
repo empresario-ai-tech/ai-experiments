@@ -132,13 +132,15 @@ class AudioLoop:
 
     async def send_text(self):
         while True:
-            text = await asyncio.to_thread(
-                input,
-                "message > ",
-            )
-            if text.lower() == "q":
+            try:
+                # Receive text from the WebSocket
+                text = await self.websocket.receive_text()
+                if text.lower() == "q":
+                    break
+                await self.session.send(input=text or ".", end_of_turn=True)
+            except WebSocketDisconnect:
+                print("WebSocket disconnected. Stopping text sending.")
                 break
-            await self.session.send(input=text or ".", end_of_turn=True)
 
     # def _get_frame(self, cap):
     #     # Read the frameq
@@ -292,5 +294,5 @@ class AudioLoop:
         except asyncio.CancelledError:
             pass
         except (ExceptionGroup if sys.version_info >= (3, 11, 0) else exceptiongroup.ExceptionGroup) as EG:
-            self.audio_stream.close()
+            # self.audio_stream.close()
             traceback.print_exception(EG)
