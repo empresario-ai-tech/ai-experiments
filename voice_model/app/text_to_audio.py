@@ -84,6 +84,8 @@ client = genai.Client(http_options={"api_version": "v1alpha"}, api_key=os.getenv
 
 CONFIG = {"generation_config": {"response_modalities": ["AUDIO"]}}
 
+app = FastAPI()
+
 class ConnectionManager:
     """
     Manages active WebSocket connections.
@@ -100,7 +102,20 @@ class ConnectionManager:
         self.active_connections.remove(websocket)
         print(f"Client disconnected: {websocket.client}")
 
+# Initialize the connection manager
 manager = ConnectionManager()
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    audio_loop = AudioLoop(websocket)
+    await audio_loop.run()
+    manager.disconnect(websocket)
+
+# Define a simple root endpoint for testing
+@app.get("/")
+async def read_root():
+    return {"message": "Welcome to the Text to Audio API"}
 
 class AudioLoop:
     def __init__(self, websocket: WebSocket, video_mode=DEFAULT_MODE):
@@ -280,24 +295,3 @@ class AudioLoop:
         except (ExceptionGroup if sys.version_info >= (3, 11, 0) else exceptiongroup.ExceptionGroup) as EG:
             self.audio_stream.close()
             traceback.print_exception(EG)
-
-
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
-    audio_loop = AudioLoop(websocket)
-    await audio_loop.run()
-    manager.disconnect(websocket)
-    
-# if __name__ == "__main__":
-#     parser = argparse.ArgumentParser()
-#     parser.add_argument(
-#         "--mode",
-#         type=str,
-#         default=DEFAULT_MODE,
-#         help="pixels to stream from",
-#         choices=["camera", "screen", "none"],
-#     )
-#     args = parser.parse_args()
-#     main = AudioLoop(video_mode=args.mode)
-#     asyncio.run(main.run())

@@ -13,5 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Make port 8080 available to the world outside this container
 EXPOSE 8080 
 
+RUN ls -latrh
+
 # Run app.py when the container launches
-CMD ["uvicorn", "text_to_audio", "--host", "localhost", "--port", "8080"]
+CMD ["uvicorn", "text_to_audio:app", "--host", "localhost", "--port", "8080"]
