@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Audio Test</title>
+</head>
+<body>
+    <h1>WebSocket Audio Test</h1>
+    <input type="text" id="textInput" placeholder="Type your message here">
+    <button onclick="sendMessage()">Send</button>
+    <audio id="audioPlayer" controls autoplay></audio>
+
+    <script>
+        let websocket;
+        const audioPlayer = document.getElementById('audioPlayer');
+
+        // Create a new WebSocket connection when the page loads
+        window.onload = function() {
+            websocket = new WebSocket('wss://<your-cloud-run-url>/ws');
+
+            websocket.onopen = function(event) {
+                console.log('WebSocket connection opened:', event);
+            };
+
+            websocket.onmessage = function(event) {
+                console.log('Audio data received:', event.data);
+                playAudio(event.data);
+            };
+
+            websocket.onclose = function(event) {
+                console.log('WebSocket connection closed:', event);
+            };
+
+            websocket.onerror = function(error) {
+                console.error('WebSocket error:', error);
+            };
+        };
+
+        // Function to send a message through the WebSocket
+        function sendMessage() {
+            const textInput = document.getElementById('textInput').value;
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                websocket.send(textInput);
+            }
+        }
+
+        // Function to play audio from the received data
+        function playAudio(data) {
+            const audioBlob = new Blob([data], { type: 'audio/pcm' });
+            const audioUrl = URL.createObjectURL(audioBlob);
+            audioPlayer.src = audioUrl;
+        }
+    </script>
+</body>
+</html>
