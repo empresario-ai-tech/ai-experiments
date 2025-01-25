@@ -25,4 +25,4 @@ EXPOSE 8080
 RUN ls -latrh
 
 # Run app.py when the container launches
-CMD ["uvicorn", "text_to_audio:app", "--host", "localhost", "--port", "8080"]
+CMD ["uvicorn", "text_to_audio:app", "--host", "0.0.0.0", "--port", "8080"]
