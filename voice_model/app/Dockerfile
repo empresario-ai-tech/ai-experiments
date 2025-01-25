@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y \
     libglib2.0-0 \
     gcc \
     libasound2-dev \
+    portaudio19-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the current directory contents into the container at /app
