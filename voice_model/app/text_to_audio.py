@@ -130,17 +130,17 @@ class AudioLoop:
         self.receive_audio_task = None
         self.play_audio_task = None
 
-    async def send_text(self):
-        while True:
-            try:
-                # Receive text from the WebSocket
-                text = await self.websocket.receive_text()
-                if text.lower() == "q":
-                    break
-                await self.session.send(input=text or ".", end_of_turn=True)
-            except WebSocketDisconnect:
-                print("WebSocket disconnected. Stopping text sending.")
-                break
+    # async def send_text(self):
+    #     while True:
+    #         try:
+    #             # Receive text from the WebSocket
+    #             text = await self.websocket.receive_text()
+    #             if text.lower() == "q":
+    #                 break
+    #             await self.session.send(input=text or ".", end_of_turn=True)
+    #         except WebSocketDisconnect:
+    #             print("WebSocket disconnected. Stopping text sending.")
+    #             break
 
     # def _get_frame(self, cap):
     #     # Read the frameq
@@ -273,7 +273,7 @@ class AudioLoop:
                 self.audio_in_queue = asyncio.Queue()
                 self.out_queue = asyncio.Queue(maxsize=5)
 
-                send_text_task = tg.create_task(self.send_text())
+                # send_text_task = tg.create_task(self.send_text())
                 tg.create_task(self.send_realtime())
                 tg.create_task(self.listen_audio())
                 # if self.video_mode == "camera":
@@ -284,8 +284,8 @@ class AudioLoop:
                 tg.create_task(self.receive_audio())
                 tg.create_task(self.play_audio())
 
-                await send_text_task
-                raise asyncio.CancelledError("User requested exit")
+                # await send_text_task
+                # raise asyncio.CancelledError("User requested exit")
 
         except asyncio.CancelledError:
             pass
