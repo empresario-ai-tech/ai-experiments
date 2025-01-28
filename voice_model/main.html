@@ -13,6 +13,7 @@
 
     <script>
         let websocket;
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
         const audioPlayer = document.getElementById('audioPlayer');
 
         // Create a new WebSocket connection when the page loads
@@ -45,11 +46,19 @@
             }
         }
 
-        // Function to play audio from the received data
+        // Function to play audio from the received PCM data
         function playAudio(data) {
-            const audioBlob = new Blob([data], { type: 'audio/pcm' });
-            const audioUrl = URL.createObjectURL(audioBlob);
-            audioPlayer.src = audioUrl;
+            const arrayBuffer = data.arrayBuffer ? data.arrayBuffer() : new Response(data).arrayBuffer();
+            arrayBuffer.then(buffer => {
+                audioContext.decodeAudioData(buffer, decodedData => {
+                    const source = audioContext.createBufferSource();
+                    source.buffer = decodedData;
+                    source.connect(audioContext.destination);
+                    source.start(0);
+                }, error => {
+                    console.error('Error decoding audio data:', error);
+                });
+            });
         }
     </script>
 </body>

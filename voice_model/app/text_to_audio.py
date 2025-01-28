@@ -210,29 +210,25 @@ class AudioLoop:
 
     #         await self.out_queue.put(frame)
 
-    # async def send_realtime(self):
-    #     while True:
-    #         msg = await self.out_queue.get()
-    #         await self.session.send(input=msg)
+    async def send_realtime(self):
+        while True:
+            msg = await self.out_queue.get()
+            await self.session.send(input=msg)
 
-    # async def listen_audio(self):
-    #     mic_info = pya.get_default_input_device_info()
-    #     self.audio_stream = await asyncio.to_thread(
-    #         pya.open,
-    #         format=FORMAT,
-    #         channels=CHANNELS,
-    #         rate=SEND_SAMPLE_RATE,
-    #         input=True,
-    #         input_device_index=mic_info["index"],
-    #         frames_per_buffer=CHUNK_SIZE,
-    #     )
-    #     if __debug__:
-    #         kwargs = {"exception_on_overflow": False}
-    #     else:
-    #         kwargs = {}
-    #     while True:
-    #         data = await asyncio.to_thread(self.audio_stream.read, CHUNK_SIZE, **kwargs)
-    #         await self.out_queue.put({"data": data, "mime_type": "audio/pcm"})
+    async def listen_audio(self):
+        """
+        Receives audio byte streams from the WebSocket instead of reading from a local audio stream.
+        """
+        while True:
+            try:
+                # Receive audio data from the WebSocket
+                data = await self.websocket.receive_bytes()
+                await self.out_queue.put({"data": data, "mime_type": "audio/pcm"})
+            except WebSocketDisconnect:
+                print("WebSocket disconnected. Stopping audio listening.")
+                break
+            except Exception as e:
+                print(f"Error receiving audio bytes: {e}")
 
     async def receive_audio(self):
         "Background task to reads from the websocket and write pcm chunks to the output queue"
@@ -278,8 +274,8 @@ class AudioLoop:
                 self.out_queue = asyncio.Queue(maxsize=5)
 
                 send_text_task = tg.create_task(self.send_text())
-                # tg.create_task(self.send_realtime())
-                # tg.create_task(self.listen_audio())
+                tg.create_task(self.send_realtime())
+                tg.create_task(self.listen_audio())
                 # if self.video_mode == "camera":
                 #     tg.create_task(self.get_frames())
                 # elif self.video_mode == "screen":
