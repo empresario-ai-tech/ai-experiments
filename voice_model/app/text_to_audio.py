@@ -236,7 +236,14 @@ class AudioLoop:
             turn = self.session.receive()
             async for response in turn:
                 if data := response.data:
-                    self.audio_in_queue.put_nowait(data)
+                    # self.audio_in_queue.put_nowait(data)
+                    try:
+                        await self.websocket.send_bytes(data)
+                    except WebSocketDisconnect:
+                        print("WebSocket disconnected. Stopping audio playback.")
+                        break
+                    except Exception as e:
+                        print(f"Error sending audio bytes: {e}")
                     continue
                 if text := response.text:
                     print(text, end="")
@@ -245,8 +252,8 @@ class AudioLoop:
             # For interruptions to work, we need to stop playback.
             # So empty out the audio queue because it may have loaded
             # much more audio than has played yet.
-            while not self.audio_in_queue.empty():
-                self.audio_in_queue.get_nowait()
+            # while not self.audio_in_queue.empty():
+            #     self.audio_in_queue.get_nowait()
 
     async def play_audio(self):
         """
@@ -282,7 +289,7 @@ class AudioLoop:
                 #     tg.create_task(self.get_screen())
 
                 tg.create_task(self.receive_audio())
-                tg.create_task(self.play_audio())
+                # tg.create_task(self.play_audio())
 
                 # await send_text_task
                 # raise asyncio.CancelledError("User requested exit")
