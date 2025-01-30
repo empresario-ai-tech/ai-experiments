@@ -51,6 +51,7 @@ import io
 import os
 import sys
 import traceback
+import logging
 
 import cv2
 import pyaudio
@@ -85,6 +86,8 @@ CONFIG = {"generation_config": {"response_modalities": ["AUDIO"]}}
 
 app = FastAPI()
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 class ConnectionManager:
     """
     Manages active WebSocket connections.
@@ -95,11 +98,11 @@ class ConnectionManager:
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
-        print(f"Client connected: {websocket.client}")
+        logging.info(f"Client connected: {websocket.client}")
 
     def disconnect(self, websocket: WebSocket):
         self.active_connections.remove(websocket)
-        print(f"Client disconnected: {websocket.client}")
+        logging.info(f"Client disconnected: {websocket.client}")
 
 # Initialize the connection manager
 manager = ConnectionManager()
@@ -213,6 +216,7 @@ class AudioLoop:
     async def send_realtime(self):
         while True:
             msg = await self.out_queue.get()
+            logging.info(f"Sending message: {msg}")
             await self.session.send(input=msg)
 
     async def listen_audio(self):
@@ -223,24 +227,25 @@ class AudioLoop:
             try:
                 # Receive audio data from the WebSocket
                 data = await self.websocket.receive_bytes()
+                logging.info(f"Received audio data: {data}")
                 await self.out_queue.put({"data": data, "mime_type": "audio/pcm"})
             except WebSocketDisconnect:
-                print("WebSocket disconnected. Stopping audio listening.")
+                logging.info("WebSocket disconnected. Stopping audio listening.")
                 break
             except Exception as e:
-                print(f"Error receiving audio bytes: {e}")
+                logging.error(f"Error receiving audio bytes: {e}")
 
     async def receive_audio(self):
         "Background task to reads from the websocket and write pcm chunks to the output queue"
         while True:
             turn = self.session.receive()
-            print(f"Turn: {turn}")
+            logging.info(f"Turn: {turn}")
             async for response in turn:
                 if data := response.data:
                     self.audio_in_queue.put_nowait(data)
                     continue
                 if text := response.text:
-                    print(text, end="")
+                    logging.info(text, end="")
 
             # If you interrupt the model, it sends a turn_complete.
             # For interruptions to work, we need to stop playback.
@@ -255,13 +260,14 @@ class AudioLoop:
         """
         while True:
             bytestream = await self.audio_in_queue.get()
+            logging.info(f"Sending audio data: {len(bytestream)} bytes")
             try:
                 await self.websocket.send_bytes(bytestream)
             except WebSocketDisconnect:
-                print("WebSocket disconnected. Stopping audio playback.")
+                logging.info("WebSocket disconnected. Stopping audio playback.")
                 break
             except Exception as e:
-                print(f"Error sending audio bytes: {e}")
+                logging.error(f"Error sending audio bytes: {e}")
 
     async def run(self):
         try:
