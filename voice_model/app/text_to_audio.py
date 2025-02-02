@@ -221,19 +221,27 @@ class AudioLoop:
 
     async def listen_audio(self):
         """
-        Receives audio byte streams from the WebSocket instead of reading from a local audio stream.
+        Receives audio byte streams and text from the WebSocket.
         """
         while True:
             try:
-                # Receive audio data from the WebSocket
-                data = await self.websocket.receive_bytes()
-                # logging.info(f"Received audio data: {data}")
-                await self.out_queue.put({"data": data, "mime_type": "audio/pcm"})
+                # Receive data from the WebSocket
+                data = await self.websocket.receive()
+                
+                # Check the type of data received
+                if data.get("type") == "text":
+                    # Handle text data
+                    text = data.get("text", "")
+                    await self.session.send(input=text or ".", end_of_turn=True)
+                elif data.get("type") == "bytes":
+                    # Handle audio data
+                    audio_data = data.get("bytes")
+                    await self.out_queue.put({"data": audio_data, "mime_type": "audio/pcm"})
             except WebSocketDisconnect:
                 logging.info("WebSocket disconnected. Stopping audio listening.")
                 break
             except Exception as e:
-                logging.error(f"Error receiving audio bytes: {e}")
+                logging.error(f"Error receiving data: {e}")
 
     async def receive_audio(self):
         "Background task to reads from the websocket and write pcm chunks to the output queue"
