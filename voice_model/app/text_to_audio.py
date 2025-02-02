@@ -216,7 +216,7 @@ class AudioLoop:
     async def send_realtime(self):
         while True:
             msg = await self.out_queue.get()
-            logging.info(f"Sending message: {msg}")
+            # logging.info(f"Sending message: {msg}")
             await self.session.send(input=msg)
 
     async def listen_audio(self):
@@ -227,7 +227,7 @@ class AudioLoop:
             try:
                 # Receive audio data from the WebSocket
                 data = await self.websocket.receive_bytes()
-                logging.info(f"Received audio data: {data}")
+                # logging.info(f"Received audio data: {data}")
                 await self.out_queue.put({"data": data, "mime_type": "audio/pcm"})
             except WebSocketDisconnect:
                 logging.info("WebSocket disconnected. Stopping audio listening.")
