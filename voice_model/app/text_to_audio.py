@@ -253,6 +253,10 @@ class AudioLoop:
             # much more audio than has played yet.
             while not self.audio_in_queue.empty():
                 self.audio_in_queue.get_nowait()
+            
+            # Send a zero-length audio chunk as a signal
+            empty_signal = b''
+            await self.websocket.send_bytes(empty_signal)
 
     async def play_audio(self):
         """
