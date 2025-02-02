@@ -227,6 +227,7 @@ class AudioLoop:
             try:
                 # Receive data from the WebSocket
                 data = await self.websocket.receive()
+                logging.info(f"Received data: {data}")
                 
                 # Check the type of data received
                 if data.get("type") == "text":
