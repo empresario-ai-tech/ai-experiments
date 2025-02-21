@@ -59,7 +59,12 @@ import mss
 
 import argparse
 
+from IPython import display
+
 from google import genai
+from google.genai import types
+
+from pydantic import BaseModel
 
 if sys.version_info < (3, 11, 0):
     import taskgroup, exceptiongroup
@@ -79,10 +84,40 @@ DEFAULT_MODE = "none"
 
 client = genai.Client(http_options={"api_version": "v1alpha"})
 
-CONFIG = {"generation_config": {"response_modalities": ["AUDIO"]}}
+CONFIG = {
+    "generation_config": {
+        "response_modalities": ["AUDIO"]
+    },
+    "speech_config": {
+        "voice_config": {
+            "prebuilt_voice_config": {
+                "voice_name": "Aoede"
+            }
+        }
+    }
+}
 
 pya = pyaudio.PyAudio()
 
+# # Set device to GPU if available
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# # Move model to the selected device
+# model = torch.hub.load('google/gemini-2.0-flash-exp', 'gemini2_flash_exp')
+# model.to(device)
+
+# # Verify GPU detection
+# print("CUDA available:", torch.cuda.is_available())
+# if torch.cuda.is_available():
+#     print("CUDA device count:", torch.cuda.device_count())
+#     print("CUDA device name:", torch.cuda.get_device_name(0))
+
+# # Example of moving data to GPU
+# def process_data(data):
+#     # Move input data to the same device as the model
+#     data = data.to(device)
+#     output = model(data)
+#     return output
 
 class AudioLoop:
     def __init__(self, video_mode=DEFAULT_MODE):
@@ -93,6 +128,7 @@ class AudioLoop:
 
         self.session = None
 
+        self.recipes = {}  # Store recipes in memory
         self.send_text_task = None
         self.receive_audio_task = None
         self.play_audio_task = None
@@ -199,6 +235,106 @@ class AudioLoop:
             data = await asyncio.to_thread(self.audio_stream.read, CHUNK_SIZE, **kwargs)
             await self.out_queue.put({"data": data, "mime_type": "audio/pcm"})
 
+    async def manage_recipe(self, fc) -> str:
+        """Manages recipe creation and updates using natural language input."""
+        try:
+            action = fc.args.get('action')
+            recipe_name = fc.args.get('recipe_name')
+            changes_text = fc.args.get('changes', '')
+            
+            result = ""
+            if action == "get":
+                if recipe_name not in self.recipes:
+                    result = f"Recipe '{recipe_name}' not found."
+                else:
+                    result = f"Recipe '{recipe_name}': {self.recipes[recipe_name]}"
+            elif action in ["create", "update"]:
+                if not changes_text:
+                    result = f"Cannot {action} recipe '{recipe_name}' without changes."
+                    return result
+
+                # Create a contextual prompt based on the action
+                if action == "create":
+                    prompt = f"""
+                    Create recipe for '{recipe_name}' with the following details:
+                    {changes_text}
+                    
+                    Extract the ingredients and instructions from the above description and format them as a JSON object.
+                    """
+                else:  # update
+                    existing_recipe = self.recipes.get(recipe_name)
+                    if not existing_recipe:
+                        result = f"Recipe '{recipe_name}' not found. Use create to make a new recipe."
+                        return result
+                        
+                    prompt = f"""
+                    Update recipe for '{recipe_name}'
+                    
+                    Current recipe:
+                    Ingredients: {existing_recipe['ingredients']}
+                    Instructions: {existing_recipe['instructions']}
+                    
+                    Requested changes:
+                    {changes_text}
+                    
+                    Provide the complete updated recipe as a JSON object with all ingredients and instructions.
+                    """
+
+                model_client = genai.Client()
+
+                # Parse the natural language input using the model
+                parse_response = await model_client.aio.models.generate_content(
+                    model='gemini-2.0-flash-exp',
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=[
+                                                'You are a helpful recipe creator and updater.',
+                                                'Your mission is to create and update recipes based on natural language input.'
+                                            ],
+                        response_mime_type='application/json',
+                        response_schema=RecipeDetails,
+                    )
+                )
+                
+                recipe_details = RecipeDetails.model_validate_json(parse_response.text)
+                
+                if action == "create":
+                    if recipe_name in self.recipes:
+                        result = f"Recipe '{recipe_name}' already exists. Use update to modify it."
+                    else:
+                        self.recipes[recipe_name] = {
+                            'ingredients': recipe_details.ingredients,
+                            'instructions': recipe_details.instructions
+                        }
+                        result = f"Created new recipe '{recipe_name}' successfully."
+                else:  # update
+                    self.recipes[recipe_name].update({
+                        'ingredients': recipe_details.ingredients,
+                        'instructions': recipe_details.instructions
+                    })
+                    result = f"Updated recipe '{recipe_name}' successfully."
+
+            tool_response = types.LiveClientToolResponse(
+                function_responses=[types.FunctionResponse(
+                    name="manage_recipe",
+                    id=fc.id,
+                    response={'result': result},
+                )]
+            )
+            print('\n>>> ', tool_response)
+            await self.session.send(input=tool_response)
+
+        except Exception as e:
+            error_result = f"Error managing recipe: {str(e)}"
+            tool_response = types.LiveClientToolResponse(
+                function_responses=[types.FunctionResponse(
+                    name="manage_recipe",
+                    id=fc.id,
+                    response={'error': error_result},
+                )]
+            )
+            await self.session.send(input=tool_response)
+
     async def receive_audio(self):
         "Background task to reads from the websocket and write pcm chunks to the output queue"
         while True:
@@ -209,6 +345,23 @@ class AudioLoop:
                     continue
                 if text := response.text:
                     print(text, end="")
+                
+                server_content = response.server_content
+                if server_content is not None:
+                    self.handle_server_content(server_content)
+                    continue
+
+                tool_call = response.tool_call
+                if tool_call is not None:
+                    for fc in tool_call.function_calls:
+                        if fc.name == "manage_recipe":
+                            asyncio.create_task(self.manage_recipe(fc))
+                        elif fc.name == "turn_on_the_lights":
+                            asyncio.create_task(self.turn_on_the_lights(fc))
+                        elif fc.name == "turn_off_the_lights":
+                            asyncio.create_task(self.turn_off_the_lights(fc))
+                        elif fc.name == "get_current_weather":
+                            asyncio.create_task(self.get_current_weather(fc))
 
             # If you interrupt the model, it sends a turn_complete.
             # For interruptions to work, we need to stop playback.
@@ -228,9 +381,97 @@ class AudioLoop:
         while True:
             bytestream = await self.audio_in_queue.get()
             await asyncio.to_thread(stream.write, bytestream)
+    
+    def handle_server_content(self, server_content):
+        model_turn = server_content.model_turn
+        if model_turn:
+            for part in model_turn.parts:
+                executable_code = part.executable_code
+                if executable_code is not None:
+                    print('-------------------------------')
+                    print(f'``` python\n{executable_code.code}\n```')
+                    print('-------------------------------')
 
-    async def run(self):
+                code_execution_result = part.code_execution_result
+                if code_execution_result is not None:
+                    print('-------------------------------')
+                    print(f'```\n{code_execution_result.output}\n```')
+                    print('-------------------------------')
+
+        grounding_metadata = getattr(server_content, 'grounding_metadata', None)
+        if grounding_metadata is not None:
+            display.display(
+                display.HTML(grounding_metadata.search_entry_point.rendered_content))
+
+        return
+    
+    async def get_current_weather(self, fc) -> str:
+        """Returns the current weather.
+
+        Args:
+        location: The city and state, e.g. San Francisco, CA
+        """
+        print("Getting current weather")
+        weather = """
+            As of 12:25 AM EST on Sunday, February 9, 2025, here's the current weather and forecast for Toronto, Ontario:
+            Current temperature: 2.5°C
+            Current conditions: Partly cloudy
+            Forecast for the next 24 hours:
+            - 12:25 AM EST: 2.5°C, partly cloudy
+            - 1:25 AM EST: 2.5°C, partly cloudy
+            - 2:25 AM EST: 2.5°C, partly cloudy
+            - 3:25 AM EST: 2.5°C, partly cloudy
+            - 4:25 AM EST: 2.5°C, partly cloudy
+        """
+        tool_response = types.LiveClientToolResponse(
+            function_responses=[types.FunctionResponse(
+                name="get_current_weather",
+                id=fc.id,
+                response={'result': weather},
+            )]
+        )
+        print('\n>>> ', tool_response)
+        await self.session.send(input=tool_response)
+
+    async def turn_on_the_lights(self, fc):
+        print("Turning on the lights")
+        tool_response = types.LiveClientToolResponse(
+            function_responses=[types.FunctionResponse(
+                name="turn_on_the_lights",
+                id=fc.id,
+                response={'result': 'The lights have been turned on successfully.'},
+            )]
+        )
+        print('\n>>> ', tool_response)
+
+        # Send the tool response first
+        await self.session.send(input=tool_response)
+        # # Then send a message to narrate the result
+        # await self.session.send(input="The lights have been turned on successfully.", end_of_turn=True)
+
+    async def turn_off_the_lights(self, fc):
+        print("Turning off the lights")
+        tool_response = types.LiveClientToolResponse(
+            function_responses=[types.FunctionResponse(
+                name="turn_off_the_lights",
+                id=fc.id,
+                response={'result': 'ok'},
+            )]
+        )
+        print('\n>>> ', tool_response)
+
+        # Send the tool response first
+        await self.session.send(input=tool_response)
+        # # Then send a message to narrate the result
+        # await self.session.send(input="The lights have been turned off successfully.", end_of_turn=True)
+
+    async def run(self, tools=None):
         try:
+            if tools is None:
+                tools=[]
+
+            CONFIG["tools"] = tools
+
             async with (
                 client.aio.live.connect(model=MODEL, config=CONFIG) as session,
                 asyncio.TaskGroup() as tg,
@@ -272,4 +513,46 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     main = AudioLoop(video_mode=args.mode)
-    asyncio.run(main.run())
+
+    # Add recipe management tool
+    manage_recipe = {
+        'name': 'manage_recipe',
+        'description': 'Manage recipes through voice commands. For create/update actions, provide natural language description of ingredients and steps.',
+        'parameters': {
+            'type': 'OBJECT',
+            'properties': {
+                'action': {
+                    'type': 'STRING',
+                    'enum': ['create', 'update', 'get'],
+                    'description': 'Action to perform on the recipe'
+                },
+                'recipe_name': {
+                    'type': 'STRING',
+                    'description': 'Name of the recipe to create, update, or retrieve'
+                },
+                'changes': {
+                    'type': 'STRING',
+                    'description': 'Natural language description of recipe ingredients and instructions'
+                }
+            },
+            'required': ['action', 'recipe_name']
+        }
+    }
+
+    class RecipeDetails(BaseModel):
+        ingredients: list[str]
+        instructions: list[str]
+
+    turn_on_the_lights = {'name': 'turn_on_the_lights'}
+    turn_off_the_lights = {'name': 'turn_off_the_lights'}
+    get_current_weather = {'name': 'get_current_weather'}
+
+    tools = [
+        {'function_declarations': [
+            manage_recipe,
+            turn_on_the_lights,
+            turn_off_the_lights,
+            get_current_weather
+        ]}
+    ]
+    asyncio.run(main.run(tools))
