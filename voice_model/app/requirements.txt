@@ -5,3 +5,5 @@ opencv-python
 pillow
 mss
 pyaudio
+fastrtc
+gradio

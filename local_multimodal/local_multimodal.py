@@ -241,6 +241,10 @@ class AudioLoop:
             action = fc.args.get('action')
             recipe_name = fc.args.get('recipe_name')
             changes_text = fc.args.get('changes', '')
+
+            print("action: ", action)
+            print("recipe_name: ", recipe_name)
+            print("changes_text: ", changes_text)
             
             result = ""
             if action == "get":
@@ -314,6 +318,7 @@ class AudioLoop:
                     })
                     result = f"Updated recipe '{recipe_name}' successfully."
 
+            print("result: ", result)
             tool_response = types.LiveClientToolResponse(
                 function_responses=[types.FunctionResponse(
                     name="manage_recipe",
@@ -326,6 +331,8 @@ class AudioLoop:
 
         except Exception as e:
             error_result = f"Error managing recipe: {str(e)}"
+            print("error_result: ", error_result)
+
             tool_response = types.LiveClientToolResponse(
                 function_responses=[types.FunctionResponse(
                     name="manage_recipe",
@@ -355,6 +362,7 @@ class AudioLoop:
                 if tool_call is not None:
                     for fc in tool_call.function_calls:
                         if fc.name == "manage_recipe":
+                            print("Calling Managing recipe")
                             asyncio.create_task(self.manage_recipe(fc))
                         elif fc.name == "turn_on_the_lights":
                             asyncio.create_task(self.turn_on_the_lights(fc))
@@ -517,22 +525,22 @@ if __name__ == "__main__":
     # Add recipe management tool
     manage_recipe = {
         'name': 'manage_recipe',
-        'description': 'Manage recipes through voice commands. For create/update actions, provide natural language description of ingredients and steps.',
+        'description': 'Manage cooking recipes through voice commands. Get existing recipes, create new ones, or update existing ones.',
         'parameters': {
             'type': 'OBJECT',
             'properties': {
                 'action': {
                     'type': 'STRING',
                     'enum': ['create', 'update', 'get'],
-                    'description': 'Action to perform on the recipe'
+                    'description': 'Action to perform: get (retrieve existing recipe), create (make new recipe, changes optional), update (modify existing recipe, changes required)'
                 },
                 'recipe_name': {
                     'type': 'STRING',
-                    'description': 'Name of the recipe to create, update, or retrieve'
+                    'description': 'Name of the recipe to work with'
                 },
                 'changes': {
                     'type': 'STRING',
-                    'description': 'Natural language description of recipe ingredients and instructions'
+                    'description': 'Natural language description of recipe ingredients and instructions. Required for update action, optional for create action, ignored for get action'
                 }
             },
             'required': ['action', 'recipe_name']

@@ -7,7 +7,7 @@ from typing import AsyncGenerator, Literal
 
 import gradio as gr
 import numpy as np
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastrtc import (
@@ -28,7 +28,7 @@ from pydantic import BaseModel
 
 current_dir = pathlib.Path(__file__).parent
 
-load_dotenv()
+# load_dotenv()
 
 
 def encode_audio(data: np.ndarray) -> str:
@@ -70,7 +70,7 @@ class GeminiHandler(AsyncStreamHandler):
             api_key, voice_name = None, "Puck"
 
         client = genai.Client(
-            api_key=api_key or os.getenv("GEMINI_API_KEY"),
+            api_key=os.environ.get("GOOGLE_API_KEY"),
             http_options={"api_version": "v1alpha"},
         )
 
@@ -79,7 +79,7 @@ class GeminiHandler(AsyncStreamHandler):
             speech_config=SpeechConfig(
                 voice_config=VoiceConfig(
                     prebuilt_voice_config=PrebuiltVoiceConfig(
-                        voice_name=voice_name,
+                        voice_name="Aoede",
                     )
                 )
             ),
@@ -126,7 +126,7 @@ stream = Stream(
         gr.Textbox(
             label="API Key",
             type="password",
-            value=os.getenv("GEMINI_API_KEY") if not get_space() else "",
+            value=os.environ.get("GOOGLE_API_KEY") if not get_space() else "",
         ),
         gr.Dropdown(
             label="Voice",
@@ -171,7 +171,7 @@ async def index():
 if __name__ == "__main__":
     import os
 
-    if (mode := os.getenv("MODE")) == "UI":
+    if (mode := os.environ.get("MODE")) == "UI":
         stream.ui.launch(server_port=7860)
     elif mode == "PHONE":
         stream.fastphone(host="0.0.0.0", port=7860)

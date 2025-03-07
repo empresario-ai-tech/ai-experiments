@@ -51,6 +51,7 @@ import io
 import os
 import sys
 import traceback
+import logging
 
 import cv2
 import pyaudio
@@ -61,7 +62,6 @@ import argparse
 
 from google import genai
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
 from typing import List
 
 if sys.version_info < (3, 11, 0):
@@ -70,19 +70,17 @@ if sys.version_info < (3, 11, 0):
     asyncio.TaskGroup = taskgroup.TaskGroup
     asyncio.ExceptionGroup = exceptiongroup.ExceptionGroup
 
-FORMAT = pyaudio.paInt16
-CHANNELS = 1
-SEND_SAMPLE_RATE = 16000
-RECEIVE_SAMPLE_RATE = 24000
-CHUNK_SIZE = 1024
-
 MODEL = "models/gemini-2.0-flash-exp"
 
 DEFAULT_MODE = "none"
 
-client = genai.Client(http_options={"api_version": "v1alpha"})
+client = genai.Client(http_options={"api_version": "v1alpha"}, api_key=os.getenv("GOOGLE_API_KEY_VOICE_MODEL"))
 
 CONFIG = {"generation_config": {"response_modalities": ["AUDIO"]}}
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+app = FastAPI()
 
 class ConnectionManager:
     """
@@ -94,13 +92,26 @@ class ConnectionManager:
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
-        print(f"Client connected: {websocket.client}")
+        logging.info(f"Client connected: {websocket.client}")
 
     def disconnect(self, websocket: WebSocket):
         self.active_connections.remove(websocket)
-        print(f"Client disconnected: {websocket.client}")
+        logging.info(f"Client disconnected: {websocket.client}")
 
+# Initialize the connection manager
 manager = ConnectionManager()
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    audio_loop = AudioLoop(websocket)
+    await audio_loop.run()
+    manager.disconnect(websocket)
+
+# Define a simple root endpoint for testing
+@app.get("/")
+async def read_root():
+    return {"message": "Welcome to the Text to Audio API"}
 
 class AudioLoop:
     def __init__(self, websocket: WebSocket, video_mode=DEFAULT_MODE):
@@ -116,15 +127,17 @@ class AudioLoop:
         self.receive_audio_task = None
         self.play_audio_task = None
 
-    async def send_text(self):
-        while True:
-            text = await asyncio.to_thread(
-                input,
-                "message > ",
-            )
-            if text.lower() == "q":
-                break
-            await self.session.send(input=text or ".", end_of_turn=True)
+    # async def send_text(self):
+    #     while True:
+    #         try:
+    #             # Receive text from the WebSocket
+    #             text = await self.websocket.receive_text()
+    #             if text.lower() == "q":
+    #                 break
+    #             await self.session.send(input=text or ".", end_of_turn=True)
+    #         except WebSocketDisconnect:
+    #             print("WebSocket disconnected. Stopping text sending.")
+    #             break
 
     # def _get_frame(self, cap):
     #     # Read the frameq
@@ -194,40 +207,39 @@ class AudioLoop:
 
     #         await self.out_queue.put(frame)
 
-    # async def send_realtime(self):
-    #     while True:
-    #         msg = await self.out_queue.get()
-    #         await self.session.send(input=msg)
+    async def send_realtime(self):
+        while True:
+            msg = await self.out_queue.get()
+            # logging.info(f"Sending message: {msg}")
+            await self.session.send(input=msg)
 
-    # async def listen_audio(self):
-    #     mic_info = pya.get_default_input_device_info()
-    #     self.audio_stream = await asyncio.to_thread(
-    #         pya.open,
-    #         format=FORMAT,
-    #         channels=CHANNELS,
-    #         rate=SEND_SAMPLE_RATE,
-    #         input=True,
-    #         input_device_index=mic_info["index"],
-    #         frames_per_buffer=CHUNK_SIZE,
-    #     )
-    #     if __debug__:
-    #         kwargs = {"exception_on_overflow": False}
-    #     else:
-    #         kwargs = {}
-    #     while True:
-    #         data = await asyncio.to_thread(self.audio_stream.read, CHUNK_SIZE, **kwargs)
-    #         await self.out_queue.put({"data": data, "mime_type": "audio/pcm"})
+    async def listen_audio(self):
+        """
+        Receives audio byte streams from the WebSocket instead of reading from a local audio stream.
+        """
+        while True:
+            try:
+                # Receive audio data from the WebSocket
+                data = await self.websocket.receive_bytes()
+                # logging.info(f"Received audio data: {data}")
+                await self.out_queue.put({"data": data, "mime_type": "audio/pcm"})
+            except WebSocketDisconnect:
+                logging.info("WebSocket disconnected. Stopping audio listening.")
+                break
+            except Exception as e:
+                logging.error(f"Error receiving audio bytes: {e}")
 
     async def receive_audio(self):
         "Background task to reads from the websocket and write pcm chunks to the output queue"
         while True:
             turn = self.session.receive()
+            logging.info(f"Turn: {turn}")
             async for response in turn:
                 if data := response.data:
                     self.audio_in_queue.put_nowait(data)
                     continue
                 if text := response.text:
-                    print(text, end="")
+                    logging.info(text, end="")
 
             # If you interrupt the model, it sends a turn_complete.
             # For interruptions to work, we need to stop playback.
@@ -235,6 +247,10 @@ class AudioLoop:
             # much more audio than has played yet.
             while not self.audio_in_queue.empty():
                 self.audio_in_queue.get_nowait()
+            
+            # Send a zero-length audio chunk as a signal
+            empty_signal = b''
+            await self.websocket.send_bytes(empty_signal)
 
     async def play_audio(self):
         """
@@ -242,13 +258,14 @@ class AudioLoop:
         """
         while True:
             bytestream = await self.audio_in_queue.get()
+            logging.info(f"Sending audio data: {len(bytestream)} bytes")
             try:
                 await self.websocket.send_bytes(bytestream)
             except WebSocketDisconnect:
-                print("WebSocket disconnected. Stopping audio playback.")
+                logging.info("WebSocket disconnected. Stopping audio playback.")
                 break
             except Exception as e:
-                print(f"Error sending audio bytes: {e}")
+                logging.error(f"Error sending audio bytes: {e}")
 
     async def run(self):
         try:
@@ -261,9 +278,9 @@ class AudioLoop:
                 self.audio_in_queue = asyncio.Queue()
                 self.out_queue = asyncio.Queue(maxsize=5)
 
-                send_text_task = tg.create_task(self.send_text())
-                # tg.create_task(self.send_realtime())
-                # tg.create_task(self.listen_audio())
+                # send_text_task = tg.create_task(self.send_text())
+                tg.create_task(self.send_realtime())
+                tg.create_task(self.listen_audio())
                 # if self.video_mode == "camera":
                 #     tg.create_task(self.get_frames())
                 # elif self.video_mode == "screen":
@@ -272,32 +289,8 @@ class AudioLoop:
                 tg.create_task(self.receive_audio())
                 tg.create_task(self.play_audio())
 
-                await send_text_task
-                raise asyncio.CancelledError("User requested exit")
-
         except asyncio.CancelledError:
             pass
         except (ExceptionGroup if sys.version_info >= (3, 11, 0) else exceptiongroup.ExceptionGroup) as EG:
-            self.audio_stream.close()
+            # self.audio_stream.close()
             traceback.print_exception(EG)
-
-
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
-    audio_loop = AudioLoop(websocket)
-    await audio_loop.run()
-    manager.disconnect(websocket)
-    
-# if __name__ == "__main__":
-#     parser = argparse.ArgumentParser()
-#     parser.add_argument(
-#         "--mode",
-#         type=str,
-#         default=DEFAULT_MODE,
-#         help="pixels to stream from",
-#         choices=["camera", "screen", "none"],
-#     )
-#     args = parser.parse_args()
-#     main = AudioLoop(video_mode=args.mode)
-#     asyncio.run(main.run())
