@@ -153,8 +153,8 @@ app = FastAPI()
 
 stream.mount(app)
 
-my_twilio_sid = os.getenv("TWILIO_SID")
-my_twilio_token = os.getenv("TWILIO_TOKEN")
+my_twilio_sid = os.environ.get("TWILIO_SID")
+my_twilio_token = os.environ.get("TWILIO_TOKEN")
 
 
 @app.post("/input_hook")
@@ -165,7 +165,7 @@ async def _(body: InputData):
 
 @app.get("/")
 async def index():
-    rtc_config = get_twilio_turn_credentials(twilio_sid=my_twilio_sid,twilio_token=my_twilio_token) if get_space() else None
+    rtc_config = get_twilio_turn_credentials(twilio_sid=my_twilio_sid,twilio_token=my_twilio_token) 
     html_content = (current_dir / "index.html").read_text()
     html_content = html_content.replace("__RTC_CONFIGURATION__", json.dumps(rtc_config))
     return HTMLResponse(content=html_content)
