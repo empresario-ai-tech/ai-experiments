@@ -347,16 +347,11 @@
                     if (eventJson.type === "error") {
                         showError(eventJson.message);
                     } else if (eventJson.type === "send_input") {
-                        fetch('https://ai-experiments-656242063975.northamerica-northeast2.run.app/input_hook', {
+                        fetch('/input_hook', {
                             method: 'POST',
                             headers: {
-                                'Content-Type': 'application/json',
-                                'Access-Control-Allow-Origin': 'http://127.0.0.1:7860',
-                                'Access-Control-Allow-Methods': 'POST, OPTIONS',
-                                'Access-Control-Allow-Headers': 'Content-Type'
+                                'Content-Type': 'application/json'
                             },
-                            mode: 'cors', // explicitly set CORS mode
-                            credentials: 'same-origin',
                             body: JSON.stringify({
                                 webrtc_id: webrtc_id,
                                 api_key: null,
@@ -384,16 +379,11 @@
                     }
                 });
 
-                const response = await fetch('https://ai-experiments-656242063975.northamerica-northeast2.run.app/webrtc/offer', {
+                const response = await fetch('/webrtc/offer', {
                     method: 'POST',
-                    // headers: { 
-                    //     'Content-Type': 'application/json',
-                    //     'Access-Control-Allow-Origin': 'http://127.0.0.1:7860',
-                    //     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-                    //     'Access-Control-Allow-Headers': "authorization, content-type, set-cookie, cookie, server"
-                    // },
-                    // mode: 'cors', // explicitly set CORS mode
-                    // credentials: 'same-origin',
+                    headers: { 
+                        'Content-Type': 'application/json'
+                    },
                     body: JSON.stringify({
                         sdp: peerConnection.localDescription.sdp,
                         type: peerConnection.localDescription.type,
