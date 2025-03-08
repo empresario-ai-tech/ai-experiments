@@ -314,6 +314,7 @@
 
                 // Add connection state change listener
                 peerConnection.addEventListener('connectionstatechange', () => {
+                    console.log('peerConnection', peerConnection);
                     console.log('connectionstatechange', peerConnection.connectionState);
                     if (peerConnection.connectionState === 'connected') {
                         clearTimeout(timeoutId);
