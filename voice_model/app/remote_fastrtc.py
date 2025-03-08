@@ -173,12 +173,12 @@ async def _(body: InputData):
 async def index():
     rtc_config = get_twilio_turn_credentials(twilio_sid=my_twilio_sid,twilio_token=my_twilio_token) 
     
-    tcp_only_ice_servers = [
-    server for server in rtc_config["iceServers"]
-    if "turn" in server["urls"] and "transport=tcp" in server["urls"] and ":443" in server["urls"]
-    ]
-    rtc_config["iceServers"] = tcp_only_ice_servers
-    rtc_config["iceTransportPolicy"] = "relay"
+    # tcp_only_ice_servers = [
+    # server for server in rtc_config["iceServers"]
+    # if "turn" in server["urls"] and "transport=tcp" in server["urls"] and ":443" in server["urls"]
+    # ]
+    # rtc_config["iceServers"] = tcp_only_ice_servers
+    # rtc_config["iceTransportPolicy"] = "relay"
     logger.info("rtc_config: %s", rtc_config)  # Replace print with logger.info
     html_content = (current_dir / "index.html").read_text()
     html_content = html_content.replace("__RTC_CONFIGURATION__", json.dumps(rtc_config))
