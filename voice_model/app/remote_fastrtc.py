@@ -128,7 +128,7 @@ stream = Stream(
     modality="audio",
     mode="send-receive",
     handler=GeminiHandler(),
-    rtc_configuration=get_twilio_turn_credentials(twilio_sid=my_twilio_sid,twilio_token=my_twilio_token),
+    rtc_configuration={ "iceServers": [{ "urls": "stun:stun.l.google.com:19302" }] }, #get_twilio_turn_credentials(twilio_sid=my_twilio_sid,twilio_token=my_twilio_token),
     concurrency_limit=5 if get_space() else None,
     time_limit=90 if get_space() else None,
     additional_inputs=[
@@ -171,7 +171,7 @@ async def _(body: InputData):
 
 @app.get("/")
 async def index():
-    rtc_config = get_twilio_turn_credentials(twilio_sid=my_twilio_sid,twilio_token=my_twilio_token) 
+    rtc_config = { "iceServers": [{ "urls": "stun:stun.l.google.com:19302" }] }; #get_twilio_turn_credentials(twilio_sid=my_twilio_sid,twilio_token=my_twilio_token) 
     
     # tcp_only_ice_servers = [
     # server for server in rtc_config["iceServers"]
