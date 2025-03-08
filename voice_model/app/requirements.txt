@@ -7,3 +7,4 @@ mss
 pyaudio
 fastrtc
 gradio
+twilio
