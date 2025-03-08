@@ -28,7 +28,7 @@ from pydantic import BaseModel
 
 current_dir = pathlib.Path(__file__).parent
 
-load_dotenv()
+# load_dotenv()
 
 
 def encode_audio(data: np.ndarray) -> str:

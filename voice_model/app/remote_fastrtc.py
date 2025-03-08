@@ -121,12 +121,14 @@ class GeminiHandler(AsyncStreamHandler):
     def shutdown(self) -> None:
         self.quit.set()
 
+my_twilio_sid = os.environ.get("TWILIO_SID")
+my_twilio_token = os.environ.get("TWILIO_TOKEN")
 
 stream = Stream(
     modality="audio",
     mode="send-receive",
     handler=GeminiHandler(),
-    rtc_configuration=get_twilio_turn_credentials() if get_space() else None,
+    rtc_configuration=get_twilio_turn_credentials(twilio_sid=my_twilio_sid,twilio_token=my_twilio_token),
     concurrency_limit=5 if get_space() else None,
     time_limit=90 if get_space() else None,
     additional_inputs=[
@@ -159,9 +161,6 @@ class InputData(BaseModel):
 app = FastAPI()
 
 stream.mount(app)
-
-my_twilio_sid = os.environ.get("TWILIO_SID")
-my_twilio_token = os.environ.get("TWILIO_TOKEN")
 
 
 @app.post("/input_hook")
