@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import json
+import logging
 import os
 import pathlib
 from typing import AsyncGenerator, Literal
@@ -25,6 +26,12 @@ from google.genai.types import (
 )
 from gradio.utils import get_space
 from pydantic import BaseModel
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 current_dir = pathlib.Path(__file__).parent
 
@@ -166,6 +173,7 @@ async def _(body: InputData):
 @app.get("/")
 async def index():
     rtc_config = get_twilio_turn_credentials(twilio_sid=my_twilio_sid,twilio_token=my_twilio_token) 
+    logger.info("rtc_config: %s", rtc_config)  # Replace print with logger.info
     html_content = (current_dir / "index.html").read_text()
     html_content = html_content.replace("__RTC_CONFIGURATION__", json.dumps(rtc_config))
     return HTMLResponse(content=html_content)
